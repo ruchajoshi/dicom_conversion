@@ -79,7 +79,7 @@ def create_binary_mask(dicom, contours):
 # Paths
 dicom_folder = r"C:\Users\r.joshi\Downloads\01_11_2024\7139000003\COMBI\L"
 rtss_path = r"C:\Users\r.joshi\Downloads\01_11_2024\7139000003\COMBI\L\rtss.dcm"
-structure_name = "urethra"
+structure_name = "bladder"
 
 # Load DICOM series and RTSS
 dicom_series = load_dicom_series(dicom_folder)
