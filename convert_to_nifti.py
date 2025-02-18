@@ -51,10 +51,6 @@ def get_contour_data(rtss, structure_name=None):
 
     return contours_per_structure
 
-
-import numpy as np
-import cv2
-
 def create_binary_mask(dicom, contours, boundary_margin=5):
     """Convert contours into a binary mask matching DICOM image dimensions."""
     image_shape = dicom.pixel_array.shape
@@ -96,8 +92,6 @@ def create_binary_mask(dicom, contours, boundary_margin=5):
 
     return mask
 
-
-
 def save_as_nifti(image_data, output_path, affine=np.eye(4)):
     """Save the image data as a NIfTI file."""
     img = nib.Nifti1Image(image_data, affine)
@@ -110,6 +104,38 @@ rtss_path = r"C:\Users\r.joshi\Downloads\01_11_2024\7139000003\COMBI\L\rtss.dcm"
 # Load DICOM series and RTSS
 dicom_series = load_dicom_series(dicom_folder)
 rtss = load_rtss(rtss_path)
+
+# Find the shape of the first DICOM slice to use as reference
+reference_slice = dicom_series[0]
+reference_shape = reference_slice.pixel_array.shape
+
+# Create the DICOM volume, resizing slices to match the reference shape
+dicom_volume = []
+for dicom in dicom_series:
+    slice_data = dicom.pixel_array
+    if slice_data.shape != reference_shape:
+        # Resize slices to match the reference shape (using interpolation)
+        slice_data = cv2.resize(slice_data, (reference_shape[1], reference_shape[0]), interpolation=cv2.INTER_LINEAR)
+    
+    # If slice has an extra channel (e.g., (634, 719, 93)), we reduce it to (634, 719)
+    if len(slice_data.shape) == 3 and slice_data.shape[2] > 1:
+        slice_data = slice_data[:, :, 0]  # Take only the first channel (usually grayscale)
+    
+    dicom_volume.append(slice_data)
+
+# Ensure all slices are of the same shape by checking the final shapes
+final_shapes = [slice.shape for slice in dicom_volume]
+if len(set(final_shapes)) > 1:
+    print("Warning: Slices have inconsistent shapes after resizing. You may need to adjust the resizing logic.")
+    print("Shapes of slices: ", final_shapes)
+
+# Convert list of slices to a numpy array (3D volume)
+dicom_volume = np.array(dicom_volume)
+
+# Save the original DICOM volume as a NIfTI file
+output_dicom_path = os.path.join(dicom_folder, "original_dicom_volume.nii.gz")
+save_as_nifti(dicom_volume, output_dicom_path)
+print(f"Saved original DICOM volume to {output_dicom_path}")
 
 # Extract contour data for all structures
 contours_per_structure = get_contour_data(rtss)
@@ -142,7 +168,6 @@ for structure_name, contours_per_slice in contours_per_structure.items():
     output_mask_path = os.path.join(dicom_folder, f"{structure_name}_mask.nii.gz")
     save_as_nifti(mask_volume, output_mask_path)
     print(f"Saved mask for {structure_name} to {output_mask_path}")
-
 
 # Optionally, show a sample mask for verification
 sample_structure = list(contours_per_structure.keys())[0]
