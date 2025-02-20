@@ -98,8 +98,8 @@ def save_as_nifti(image_data, output_path, affine=np.eye(4)):
     nib.save(img, output_path)
 
 # Paths
-dicom_folder = r"C:\Users\r.joshi\Downloads\01_11_2024\7139000003\COMBI\L"
-rtss_path = r"C:\Users\r.joshi\Downloads\01_11_2024\7139000003\COMBI\L\rtss.dcm"
+dicom_folder = r"C:\Users\r.joshi\Downloads\01_11_2024\7139000004\COMBI\L"
+rtss_path = r"C:\Users\r.joshi\Downloads\01_11_2024\7139000004\COMBI\L\rtss.dcm"
 
 # Load DICOM series and RTSS
 dicom_series = load_dicom_series(dicom_folder)
