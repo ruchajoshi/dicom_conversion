@@ -4,6 +4,7 @@ import cv2
 import os
 import matplotlib.pyplot as plt
 import nibabel as nib
+import argparse
 
 def load_dicom_series(dicom_folder):
     """Load and sort DICOM image slices from a folder and detect the RTSS file."""
@@ -99,87 +100,117 @@ def save_as_nifti(image_data, output_path, affine=np.eye(4)):
     img = nib.Nifti1Image(image_data, affine)
     nib.save(img, output_path)
 
-# Paths
-dicom_folder = r"C:\Users\r.joshi\Downloads\01_11_2024\7139000004\COMBI\L"
 
-# Load dicom series and RTSS
-dicom_series, rtss = load_dicom_series(dicom_folder)
-
-# Create the DICOM volume, taking only US images
-dicom_volume = []
-for dicom in dicom_series:
-    if dicom.Modality == 'US':
-        dicom_volume.append(dicom.pixel_array)
-
-
-# Convert list of slices to a numpy array (3D volume)
-dicom_volume = np.array(dicom_volume)
-dicom_volume = np.transpose(dicom_volume, (2, 1, 0))
-
-reference_slice = dicom_series[0]
-# Get Pixel Spacing
-pixel_spacing = np.array(reference_slice.PixelSpacing, dtype=np.float32)  # [row_spacing, col_spacing]
-
-# Get Slice Spacing
-slice_spacing = get_slice_spacing(dicom_series)
-
-# Create Affine Matrix
-affine = np.eye(4)
-affine[0, 0] = pixel_spacing[0]  # X-axis spacing
-affine[1, 1] = pixel_spacing[1]  # Y-axis spacing
-affine[2, 2] = slice_spacing     # Z-axis spacing (computed from slice positions)
-
-# Save the original DICOM volume as a NIfTI file
-output_dicom_path = os.path.join(dicom_folder, "original_dicom_volume.nii.gz")
-save_as_nifti(dicom_volume, output_dicom_path, affine)
-print(f"Saved original DICOM volume to {output_dicom_path}")
-
-# Extract contour data for all structures
-contours_per_structure = get_contour_data(rtss)
-
-# Create and save masks for all structures
-for structure_name, contours_per_slice in contours_per_structure.items():
-    print(f"Processing structure: {structure_name}")
+def extract_name_from_path(folder_path):
+    # Extract the parent folder name (before COMBI)
+    parent_folder = os.path.basename(os.path.dirname(os.path.dirname(folder_path)))
     
-    # Initialize mask_volume with the shape of the first slice as reference
-    mask_volume = []
-    slice_shape = reference_slice.pixel_array.shape  # Shape of the first slice
+    # Extract the last part (L or V)
+    last_part = os.path.basename(folder_path)
+    
+    # Combine the two parts to form the final name
+    extracted_name = f"{parent_folder}_{last_part}"
+    
+    return extracted_name
 
+def main(dicom_folder, output_folder):
+    # Load dicom series and RTSS
+    dicom_series, rtss = load_dicom_series(dicom_folder)
+
+    # Create the DICOM volume, taking only US images
+    dicom_volume = []
     for dicom in dicom_series:
         if dicom.Modality == 'US':
-            z_pos = round(dicom.ImagePositionPatient[2], 2)
-            contours = contours_per_slice.get(z_pos, [])
+            dicom_volume.append(dicom.pixel_array)
 
-            # Create a binary mask for this slice
-            mask = create_binary_mask(dicom, contours)
+    # Convert list of slices to a numpy array (3D volume)
+    dicom_volume = np.array(dicom_volume)
+    dicom_volume = np.transpose(dicom_volume, (2, 1, 0))
 
-            # Ensure mask matches the shape of the first slice (in case the dimensions change)
-            if mask.shape != slice_shape:
-                mask = np.zeros(slice_shape, dtype=np.uint8)  # Fill with zeros if there's a mismatch
+    reference_slice = dicom_series[0]
+    # Get Pixel Spacing
+    pixel_spacing = np.array(reference_slice.PixelSpacing, dtype=np.float32)  # [row_spacing, col_spacing]
 
-            mask_volume.append(mask)
+    # Get Slice Spacing
+    slice_spacing = get_slice_spacing(dicom_series)
 
-    # Convert list of masks to a numpy array (volume)
-    mask_volume = np.array(mask_volume)
-    mask_volume = np.transpose(mask_volume, (2, 1, 0))
+    # Create Affine Matrix
+    affine = np.eye(4)
+    affine[0, 0] = pixel_spacing[0]  # X-axis spacing
+    affine[1, 1] = pixel_spacing[1]  # Y-axis spacing
+    affine[2, 2] = slice_spacing     # Z-axis spacing (computed from slice positions)
 
-    # Save the mask as a NIfTI file
-    output_mask_path = os.path.join(dicom_folder, f"{structure_name}_mask.nii.gz")
-    save_as_nifti(mask_volume, output_mask_path, affine)
-    print(f"Saved mask for {structure_name} to {output_mask_path}")
+    # get the folder name for naming datasets
+    output_file_id = extract_name_from_path(dicom_folder)
 
-# Optionally, show a sample mask for verification
-sample_structure = list(contours_per_structure.keys())[0]
-sample_z = list(contours_per_structure[sample_structure].keys())[len(contours_per_structure[sample_structure]) // 2]  # Pick a middle slice
-sample_mask = contours_per_structure[sample_structure].get(sample_z, [])
-sample_mask_image = create_binary_mask(dicom_series[len(contours_per_structure[sample_structure]) // 2], sample_mask)
+    print(dicom_volume.shape)
 
-plt.subplot(1, 2, 1)
-plt.imshow(dicom_series[len(contours_per_structure[sample_structure]) // 2].pixel_array, cmap="gray")
-plt.title("DICOM Image")
+    # Save the original DICOM volume as a NIfTI file
+    output_dicom_path = os.path.join(output_folder, 'images', f"{output_file_id}.nii.gz")
+    os.makedirs(os.path.dirname(output_dicom_path), exist_ok=True)
+    save_as_nifti(dicom_volume, output_dicom_path, affine)
+    print(f"Saved original DICOM volume to {output_dicom_path}")
 
-plt.subplot(1, 2, 2)
-plt.imshow(sample_mask_image, cmap="gray")
-plt.title("Segmentation Mask")
+    # Extract contour data for all structures
+    contours_per_structure = get_contour_data(rtss)
 
-plt.show()
+    # Create and save masks for all structures
+    for structure_name, contours_per_slice in contours_per_structure.items():
+        print(f"Processing structure: {structure_name}")
+        
+        # Initialize mask_volume with the shape of the first slice as reference
+        mask_volume = []
+        slice_shape = reference_slice.pixel_array.shape  # Shape of the first slice
+
+        for dicom in dicom_series:
+            if dicom.Modality == 'US':
+                z_pos = round(dicom.ImagePositionPatient[2], 2)
+                contours = contours_per_slice.get(z_pos, [])
+
+                # Create a binary mask for this slice
+                mask = create_binary_mask(dicom, contours)
+
+                # Ensure mask matches the shape of the first slice (in case the dimensions change)
+                if mask.shape != slice_shape:
+                    mask = np.zeros(slice_shape, dtype=np.uint8)  # Fill with zeros if there's a mismatch
+
+                mask_volume.append(mask)
+
+        # Convert list of masks to a numpy array (volume)
+        mask_volume = np.array(mask_volume)
+        mask_volume = np.transpose(mask_volume, (2, 1, 0))
+
+        print(mask_volume.shape)
+
+        # Save the mask as a NIfTI file
+        structure_name_lower = structure_name.lower()  # Convert structure name to lowercase for uniformity
+        output_mask_path = os.path.join(output_folder, f'labels_{structure_name_lower}', f"{output_file_id}_{structure_name_lower}_mask.nii.gz")
+        os.makedirs(os.path.dirname(output_mask_path), exist_ok=True)
+        save_as_nifti(mask_volume, output_mask_path, affine)
+        print(f"Saved mask for {structure_name} to {output_mask_path}")
+
+    # Optionally, show a sample mask for verification
+    sample_structure = list(contours_per_structure.keys())[0]
+    sample_z = list(contours_per_structure[sample_structure].keys())[len(contours_per_structure[sample_structure]) // 2]  # Pick a middle slice
+    sample_mask = contours_per_structure[sample_structure].get(sample_z, [])
+    sample_mask_image = create_binary_mask(dicom_series[len(contours_per_structure[sample_structure]) // 2], sample_mask)
+
+    plt.subplot(1, 2, 1)
+    plt.imshow(dicom_series[len(contours_per_structure[sample_structure]) // 2].pixel_array, cmap="gray")
+    plt.title("DICOM Image")
+
+    plt.subplot(1, 2, 2)
+    plt.imshow(sample_mask_image, cmap="gray")
+    plt.title("Segmentation Mask")
+
+    plt.show()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Process DICOM series and generate NIfTI volumes and masks.")
+    
+    parser.add_argument("dicom_folder", type=str, help="Path to the folder containing DICOM files.")
+    parser.add_argument("output_folder", type=str, help="Path to the folder where output files will be saved.")
+    
+    args = parser.parse_args()
+    
+    main(args.dicom_folder, args.output_folder)
