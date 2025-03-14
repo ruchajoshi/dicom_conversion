@@ -141,6 +141,7 @@ def main(dicom_folder, output_folder):
     # Save the original DICOM volume as a NIfTI file
     output_dicom_path = os.path.join(output_folder, 'images', f"{output_file_id}.nii.gz")
     os.makedirs(os.path.dirname(output_dicom_path), exist_ok=True)
+    print(dicom_volume.shape)
     save_as_nifti(dicom_volume, output_dicom_path, affine)
     # print(f"Saved original DICOM volume to {output_dicom_path}")
 
@@ -172,11 +173,13 @@ def main(dicom_folder, output_folder):
 
         # Convert list of masks to a numpy array (volume)
         mask_volume = np.array(mask_volume)
+        mask_volume = np.transpose(mask_volume, (2, 1, 0))
 
         # Save the mask as a NIfTI file
         structure_name_lower = structure_name.lower()  # Convert structure name to lowercase for uniformity
         output_mask_path = os.path.join(output_folder, f'labels_{structure_name_lower}', f"{output_file_id}_{structure_name_lower}_mask.nii.gz")
         os.makedirs(os.path.dirname(output_mask_path), exist_ok=True)
+        print(mask_volume.shape)
         save_as_nifti(mask_volume, output_mask_path, affine)
         # print(f"Saved mask for {structure_name} to {output_mask_path}")
 
